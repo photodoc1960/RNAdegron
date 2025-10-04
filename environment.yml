@@ -1,4 +1,4 @@
-name: rinalmo
+name: rnadegron
 channels:
   - pytorch
   - nvidia

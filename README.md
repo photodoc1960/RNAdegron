@@ -1,166 +1,443 @@
-# RiboNucleic Acid Language Model - RiNALMo
+# RNAdegron - RNA Degradation Prediction System
 
-### [Paper](https://arxiv.org/abs/2403.00043) | [Weights](https://zenodo.org/records/15043668)
+**Advanced deep learning pipeline for predicting RNA sequence degradation using RiNALMo embeddings**
 
-[Rafael Josip Penić](https://www.fer.unizg.hr/en/rafael_josip.penic)<sup>1</sup>,
-[Tin Vlašić](https://sites.google.com/view/tinvlasic)<sup>2</sup>,
-[Roland G. Huber](https://web.bii.a-star.edu.sg/~rghuber/index.html)<sup>3</sup>,
-[Yue Wan](https://www.a-star.edu.sg/gis/our-people/faculty-staff/members/yue-wan)<sup>2</sup>,
-[Mile Šikić](https://www.a-star.edu.sg/gis/our-people/faculty-staff/members/mile-sikic)<sup>2</sup>
-<br>
-<sup>1</sup>Faculty of Electrical Engineering and Computing, University of Zagreb, Croatia <br>
-<sup>2</sup>Genome Institute of Singapore (GIS), Agency for Science, Technology and Research (A\*STAR), Singapore <br>
-<sup>3</sup>Bioinformatics Institute (BII), Agency for Science, Technology and Research (A\*STAR), Singapore
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-orange.svg)](https://pytorch.org/)
 
-This is the official implementation of the paper "RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks".
+---
+
+## Table of Contents
+
+- [About](#about)
+- [Key Features](#key-features)
+- [Repository Structure](#repository-structure)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+- [Model Architecture](#model-architecture)
+- [Recent Improvements](#recent-improvements)
+- [Attribution](#attribution)
+- [Citation](#citation)
+- [License](#license)
+
+---
 
 ## About
-Ribonucleic acid (RNA) plays a variety of crucial roles in fundamental biological processes. Recently, RNA has become an interesting drug target, emphasizing the need to improve our understanding of its structures and functions. Over the years, sequencing technologies have produced an enormous amount of unlabeled RNA data, which hides important knowledge and potential. Motivated by the successes of protein language models, we introduce RiboNucleic Acid Language Model (RiNALMo) to help unveil the hidden code of RNA. RiNALMo is the largest RNA language model to date with 650 million parameters pre-trained on 36 million non-coding RNA sequences from several available databases. RiNALMo is able to extract hidden knowledge and capture the underlying structure information implicitly embedded within the RNA sequences. RiNALMo achieves state-of-the-art results on several downstream tasks. Notably, we show that its generalization capabilities can overcome the inability of other deep learning methods for secondary structure prediction to generalize on unseen RNA families.
 
- <img src="./imgs/rinalmo_3.png" width="1000">
+**RNAdegron** is an advanced deep learning system for predicting RNA degradation at individual nucleotide positions. Built upon the powerful [RiNALMo](https://github.com/lbcb-sci/RiNALMo) RNA language model, RNAdegron incorporates structural features and sophisticated training strategies to achieve state-of-the-art performance in RNA stability prediction.
 
-## Quick Start - Inference
-Use following commands for the installation (Prerequisites: ```Python>=3.8``` and ```CUDA>=11.8```):
+### What RNAdegron Does
+
+- **Predicts degradation likelihood** for each position in an RNA sequence
+- **Incorporates structural information** including base pairing probabilities and graph distances
+- **Uses ensemble predictions** across 5-fold cross-validation
+- **Implements pseudo-labeling** for semi-supervised learning
+- **Provides uncertainty quantification** for predictions
+
+### Built Upon RiNALMo
+
+This project leverages embeddings from **RiNALMo** (RiboNucleic Acid Language Model), a 650M parameter transformer pre-trained on 36 million RNA sequences. RNAdegron extends RiNALMo's capabilities specifically for degradation prediction tasks.
+
+**Original RiNALMo:** [Paper](https://arxiv.org/abs/2403.00043) | [Code](https://github.com/lbcb-sci/RiNALMo) | [Weights](https://zenodo.org/records/15043668)
+
+---
+
+## Key Features
+
+### 🧬 Advanced Architecture (v7)
+- **Multi-modal inputs:** RiNALMo embeddings (640-dim) + structural features
+- **Base pairing probabilities (BPP)** from ViennaRNA
+- **Graph distance features** capturing RNA topology
+- **Nearest paired/unpaired distances** for local structure
+- **ΔG energy values** from thermodynamic calculations
+
+### 🎯 Sophisticated Training
+- **5-fold cross-validation** for robust model selection
+- **Pseudo-labeling pipeline** for semi-supervised learning
+- **Automatic rollback mechanism** to prevent degradation
+- **Position-aware validation** with uncertainty filtering
+- **Cluster-based sample weighting** for better generalization
+
+### 🔧 Production-Ready
+- **Multi-process safe data loading** with file locking
+- **Memory-efficient** tensor operations
+- **Robust error handling** with NaN detection
+- **Comprehensive logging** and checkpointing
+- **One-command pipeline execution**
+
+---
+
+## Repository Structure
+
+```
+RNAdegron/
+├── README.md                      # This file
+├── QUICK_START.md                # 5-minute getting started
+├── CONTRIBUTING.md               # Contribution guidelines
+├── CHANGELOG.md                  # Version history
+├── LICENSE                       # Apache 2.0 license
+├── .gitignore                    # Git ignore rules
+│
+├── environment.yml               # Conda environment
+├── pyproject.toml               # Package configuration
+├── full_pipeline_script.sh      # Complete pipeline automation
+│
+├── Core Pipeline (v7 - Current)
+│   ├── Dataset_v7.py            # Data loading with structural features
+│   ├── Functions_v7.py          # Training utilities
+│   ├── X_Network_v7.py          # Transformer architecture
+│   ├── train_v7.py              # Main training script
+│   ├── train_pl_v7.py           # Pseudo-label training
+│   ├── predict_v7.py            # Final prediction
+│   ├── pseudo_predict_v7.py     # Pseudo-label generation
+│   ├── pretrain_v7.py           # Optional pretraining
+│   ├── serialize_embeddings_v7.py # Feature extraction
+│   └── get_best_weights_v7.py   # Model selection
+│
+├── Utilities
+│   ├── Logger.py                # CSV logging
+│   ├── Metrics.py               # Evaluation metrics
+│   ├── LrScheduler.py           # Learning rate scheduling
+│   ├── cluster_weighting.py     # Cluster-based weighting
+│   ├── position_aware_validation.py # Position-aware stopping
+│   └── visualization_v7.py      # Result visualization
+│
+└── RiNALMo Integration
+    └── rinalmo/                 # Original RiNALMo package (for embeddings)
+        ├── data/                # Data utilities
+        ├── model/               # Model architecture
+        └── pretrained.py        # Pre-trained model loading
+```
+
+---
+
+## Installation
+
+### Prerequisites
+- Python >= 3.8
+- CUDA >= 11.8 (for GPU support)
+- 16GB+ RAM recommended
+- 50GB+ disk space for data and models
+
+### Option 1: Conda Environment (Recommended)
+
 ```bash
-git clone https://github.com/lbcb-sci/RiNALMo
-cd RiNALMo
-pip install .
+# Clone the repository
+git clone https://github.com/photodoc1960/RNAdegron.git
+cd RNAdegron
+
+# Create conda environment
+conda env create -f environment.yml
+conda activate rnadegron
+
+# Install RiNALMo for embeddings
+pip install git+https://github.com/lbcb-sci/RiNALMo.git
 pip install flash-attn==2.3.2
 ```
 
-After installation you can easily use RiNALMo to obtain nucleotide representations:
-```python
-import torch
-from rinalmo.pretrained import get_pretrained_model
+### Option 2: Pip Install
 
-DEVICE = "cuda:0"
+```bash
+git clone https://github.com/photodoc1960/RNAdegron.git
+cd RNAdegron
 
-model, alphabet = get_pretrained_model(model_name="giga-v1")
-model = model.to(device=DEVICE)
-model.eval()
-seqs = ["ACUUUGGCCA", "CCCGGU"]
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-tokens = torch.tensor(alphabet.batch_tokenize(seqs), dtype=torch.int64, device=DEVICE)
-with torch.no_grad(), torch.cuda.amp.autocast():
-  outputs = model(tokens)
-
-print(outputs["representation"])
+# Install dependencies
+pip install -r requirements.txt
+pip install git+https://github.com/lbcb-sci/RiNALMo.git
+pip install flash-attn==2.3.2
 ```
 
-## Installation
-1. Clone the repo.
-```bash
-git clone https://github.com/lbcb-sci/RiNALMo
-cd RiNALMo
-```
-2. Create conda environment. All external dependencies should be contained in ```environment.yml```.
-```bash
-# create conda environment for RiNALMo
-conda env create -f environment.yml
+### Download RiNALMo Weights
 
-# activate RiNALMo environment
-conda activate rinalmo
-```
-3. Download pre-trained weights.
 ```bash
-mkdir weights
+mkdir -p weights
 cd weights
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_pretrained.pt # 650M params
-wget https://zenodo.org/records/15043668/files/rinalmo_mega_pretrained.pt # 150M params
-wget https://zenodo.org/records/15043668/files/rinalmo_micro_pretrained.pt # 35M params
-```   
-4. Download fine-tuned weights.
-```bash
-# Download fine-tuned weights for secondary structure prediction.
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-16s_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-23s_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-5s_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-srp_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-grp1_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-telomerase_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-tmRNA_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-tRNA_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_archiveII-RNaseP_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ss_bprna_ft.pt
 
-# Download fine-tuned weights for splice-site prediction.
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_splice_acceptor_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_splice_donor_ft.pt
-
-# Download fine-tuned weights for mean ribosome loading prediction.
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_mrl_ft.pt
-
-# Download fine-tuned weights for ncRNA functional family classification.
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ncrna_class_0_noise_ft.pt
-wget https://zenodo.org/records/15043668/files/rinalmo_giga_ncrna_class_200_noise_ft.pt
+# Download RiNALMo pre-trained model (required for embeddings)
+wget https://zenodo.org/records/15043668/files/rinalmo_giga_pretrained.pt  # 650M params
 
 cd ..
 ```
 
-## Usage
-We provide pre-trained RiNALMo weights and fine-tuned weights for three downstream tasks: mean ribosome loading prediction, secondary structure prediction and splice-site prediction.
-For both evaluation and fine-tuning use ```train_<downstream_task>.py``` scripts.
+---
 
-### Evaluation
-In order to evaluate the provided fine-tuned RiNALMo models and prediction heads, please run the scripts using the following input arguments:
+## Quick Start
+
+### 1. Prepare Your Data
+
+Place your RNA sequences in JSON format:
+```json
+{"id": "seq1", "sequence": "ACGUACGUACGU", "seq_length": 12}
+{"id": "seq2", "sequence": "GCGCGCGCGCGC", "seq_length": 12}
+```
+
+### 2. Extract Features
+
 ```bash
-# skip fine-tuning and run the evaluation on the test set
---test_only
-# path to the '.pt' file containing fine-tuned model weights
---init_params
-# dataset on which you would like to evaluate the fine-tuned model
---dataset
-# download and prepare data (if needed)
---prepare_data
-# Directory that will contain or already contains training, validation and test data
-data_dir
-# directory for all the output files
---output_dir
-```
-#### Example
-To evaluate the fine-tuned RiNALMo model and prediction head on archiveII 5S rRNA test dataset for secondary structure prediction, use the ```rinalmo_giga_ss_archiveII-5s_ft.pt``` weights. Here, we provide an example run command.
-```
-python train_sec_struct_prediction.py ./ss_data --test_only --init_params ./weights/rinalmo_giga_ss_archiveII-5s_ft.pt --dataset archiveII_5s --prepare_data --output_dir ./outputs/archiveII/5s/ --accelerator gpu --devices 1
+python serialize_embeddings_v7.py \
+    --data_path ./data \
+    --output_path ./data/precomputed_features.pt \
+    --model_name giga-v1
 ```
 
-### Fine-tuning
-In order to fine-tune RiNALMo, use ```--pretrained_rinalmo_weights ./weights/rinalmo_giga_pretrained.pt ``` input argument. Use ```--help``` to learn about other available arguments.
+### 3. Run Complete Pipeline
 
-## License
+```bash
+# One command for the entire pipeline
+bash full_pipeline_script.sh
+```
 
-Copyright 2024 Šikić Lab - AI in Genomics
+This will:
+1. Extract RiNALMo embeddings and structural features
+2. Train models with 5-fold cross-validation
+3. Generate pseudo-labels on unlabeled data
+4. Fine-tune with pseudo-labels
+5. Select best models
+6. Generate final predictions
 
-### RiNALMo Code License
-Licensed under the Apache License, Version 2.0 (the "[License](./LICENSE)");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+### 4. Get Predictions
 
-[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
+Your results will be in `predictions_v7/submission_v7.csv`
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+---
 
-### Model Parameters License
-The RiNALMo parameters are made available under the terms of the Creative Commons Attribution 4.0 International (CC BY 4.0) license. You can find details at: [https://creativecommons.org/licenses/by/4.0/legalcode](https://creativecommons.org/licenses/by/4.0/legalcode).
+## Usage Guide
 
-## Citation
-If you find our work useful in your research, please cite:
+### Complete Pipeline Execution
+
+```bash
+bash full_pipeline_script.sh
+```
+
+### Step-by-Step Execution
+
+#### **Step 1: Feature Extraction**
+```bash
+python serialize_embeddings_v7.py \
+    --data_path ./data \
+    --output_path ./data/precomputed_features.pt \
+    --model_name giga-v1
+```
+
+#### **Step 2: Training (5-fold CV)**
+```bash
+# Train all folds
+bash run_v7.sh
+
+# Or train specific fold
+python train_v7.py \
+    --path ./data \
+    --fold 0 \
+    --epochs 75 \
+    --batch_size 24 \
+    --ninp 640 \
+    --nhead 16 \
+    --nhid 2560 \
+    --nlayers 5
+```
+
+#### **Step 3: Pseudo-Label Generation**
+```bash
+bash pseudo_predict_v7.sh
+
+# Or for specific fold
+python pseudo_predict_v7.py \
+    --path ./data \
+    --fold 0 \
+    --weights_path ./weights
+```
+
+#### **Step 4: Pseudo-Label Training**
+```bash
+bash run_pl_v7.sh
+
+# Or for specific fold
+python train_pl_v7.py \
+    --path ./data \
+    --fold 0 \
+    --epochs 150 \
+    --train_epochs 5 \
+    --pl_epochs 2 \
+    --rollback_thresh 0.002
+```
+
+#### **Step 5: Model Selection**
+```bash
+python get_best_weights_v7.py \
+    --fold 0 \
+    --log_dir ./logs \
+    --checkpoint_dir ./checkpoints_fold0
+```
+
+#### **Step 6: Final Prediction**
+```bash
+python predict_v7.py \
+    --path ./data \
+    --weights_path ./best_weights \
+    --output_dir ./predictions_v7 \
+    --nfolds 5
+```
+
+---
+
+## Model Architecture
+
+### Input Features
+
+1. **RiNALMo Embeddings (640-dim)**
+   - Pre-trained contextual representations
+   - Extracted from giga-v1 model
+   - Captures sequence patterns and motifs
+
+2. **Structural Features**
+   - **BPP Matrices:** Base pairing probabilities from ViennaRNA
+   - **Graph Distances:** Topological distances in RNA structure
+   - **Nearest Paired Distances:** Distance to closest paired base
+   - **Nearest Unpaired Distances:** Distance to closest unpaired base
+   - **ΔG Values:** Free energy of predicted structures
+
+### Network Architecture
+
+```
+Input Layer (640-dim RiNALMo embeddings)
+    ↓
+Structural Feature Integration
+    ↓
+Multi-Head Attention with BPP (16 heads)
+    ↓
+Convolutional Transformer Encoder (5 layers, 2560 hidden)
+    ↓
+Output Layer (5 degradation targets)
+```
+
+### Training Strategy
+
+- **Cross-Validation:** 5-fold stratified splits
+- **Pseudo-Labeling:** Semi-supervised learning on unlabeled data
+- **Alternating Training:** 5 epochs supervised + 2 epochs pseudo-labeled
+- **Rollback Protection:** Automatic reversion if validation degrades
+- **Position Weighting:** Focus on reliable regions
+- **Cluster Weighting:** Balance sequence diversity
+
+---
+
+## Recent Improvements
+
+### v7.1 Bug Fixes
+- ✅ **Fixed sequence length assumptions** - Uses actual lengths from data
+- ✅ **Implemented file locking** - Safe multi-process data loading
+- ✅ **Added NaN handling** - Robust training with automatic rollback
+- ✅ **Fixed memory leaks** - Proper tensor detachment
+- ✅ **Initialized all variables** - No more NameError crashes
+
+### Performance Enhancements
+- ✅ **Multi-process safety** - Concurrent BPP generation with locks
+- ✅ **Position-aware early stopping** - Better convergence detection
+- ✅ **Winner's strategy integration** - Column weights, cluster sampling
+
+---
+
+## Attribution
+
+### Built Upon RiNALMo
+
+This project uses embeddings from **RiNALMo** (RiboNucleic Acid Language Model):
+
+**RiNALMo Citation:**
 ```bibtex
-@article{penic2024_rinalmo,
+@article{penic2024rinalmo,
   title={RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks},
-  author={Penić, Rafael Josip and Vlašić, Tin and Huber, Roland G. and Wan, Yue and Šikić, Mile},
+  author={Peni{\'c}, Rafael Josip and Vla{\v{s}}i{\'c}, Tin and Huber, Roland G and Wan, Yue and {\v{S}}iki{\'c}, Mile},
   journal={arXiv preprint arXiv:2403.00043},
   year={2024}
 }
 ```
 
-## Contact
-If you have any questions, please feel free to email the authors or open an issue.
+**RiNALMo Resources:**
+- 📄 [Paper](https://arxiv.org/abs/2403.00043)
+- 💻 [Code](https://github.com/lbcb-sci/RiNALMo)
+- 🔗 [Pre-trained Weights](https://zenodo.org/records/15043668)
 
-## Acknowledgment
-This work was supported in part by the National Research Foundation (NRF) Competitive Research Programme (CRP) under Project _Identifying Functional RNA Tertiary Structures in Dengue Virus_ (NRF-CRP27-2021RS-0001) and in part by the A\*STAR under Grant _GAP2: A\*STAR RNA-Foundation Model (A\*STAR RNA-FM)_ (I23D1AG079).
+### Additional Tools
 
-The computational work for the paper was partially performed on resources of the National Supercomputing Centre, Singapore [https://www.nscc.sg](https://www.nscc.sg).
+- **ViennaRNA** for structure prediction and BPP calculation
+- **PyTorch** for deep learning framework
+- **Flash Attention** for efficient attention mechanisms
+
+---
+
+## Citation
+
+If you use RNAdegron in your research, please cite:
+
+```bibtex
+@software{rnadegron2024,
+  title={RNAdegron: RNA Degradation Prediction using RiNALMo Embeddings},
+  author={photodoc1960},
+  year={2024},
+  url={https://github.com/photodoc1960/RNAdegron}
+}
+```
+
+**Please also cite the original RiNALMo paper** (see [Attribution](#attribution) section).
+
+---
+
+## License
+
+Copyright 2024 photodoc1960
+
+### RNAdegron Code License
+This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE) file for details.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software.
+
+### Third-Party Dependencies
+This project uses RiNALMo for embedding extraction. RiNALMo is licensed under:
+- **Code:** Apache License 2.0
+- **Model Parameters:** CC BY 4.0
+
+**Users must comply with RiNALMo's licensing terms** when using this software. Please cite both RNAdegron and RiNALMo in your work.
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Contribution Guide
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests and checks
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+---
+
+## Support
+
+- 📧 **Issues:** [GitHub Issues](https://github.com/photodoc1960/RNAdegron/issues)
+- 💬 **Discussions:** [GitHub Discussions](https://github.com/photodoc1960/RNAdegron/discussions)
+- 📖 **Documentation:** [Wiki](https://github.com/photodoc1960/RNAdegron/wiki) (coming soon)
+
+---
+
+## Acknowledgments
+
+- **RiNALMo Team** at University of Zagreb and A*STAR for the foundational language model
+- **ViennaRNA Team** for RNA structure prediction tools
+- **PyTorch Community** for the deep learning framework
+- All contributors to this project
+
+---
+
+**RNAdegron** - Advancing RNA degradation prediction through deep learning 🧬
