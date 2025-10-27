@@ -15,6 +15,12 @@ from Dataset_v7 import *
 from X_Network_v7 import *
 from torch.amp import autocast  # Native PyTorch mixed precision
 
+# RNA Sequence Length Constants
+SEQ_LENGTH_SHORT = 107  # Short sequence length
+SEQ_LENGTH_LONG = 130   # Long sequence length
+SEQ_LENGTH_SCORED = 68  # Competition-scored region
+SEQ_LENGTH_FULL = 91    # Full padded sequence length for model
+
 
 def generate_submission_file_v7(standardized_predictions, test_ids, opts, output_dir, sequence_lengths=None):
     """

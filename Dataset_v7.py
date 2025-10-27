@@ -435,26 +435,14 @@ class RNADataset(Dataset):
                     # Trigger regeneration block by raising exception
                     raise IOError("Length mismatch requires regeneration")
 
-            except (FileNotFoundError, IOError):
-                print(f"[{id}] Regenerating BPP, structure, and loop via ViennaRNA (len: {len(seq)})")
-                bpp_matrix = generate_bpp_matrix(seq)
-                structure, loop_annotation = generate_structure_and_loop(seq)
-                structures = [structure]
-                loops = [loop_annotation]
-                bpps = np.expand_dims(bpp_matrix, axis=0)
+            except (FileNotFoundError, IOError, ValueError) as e:
+                # Force regeneration with ViennaRNA for any loading error
+                print(f"[{id}] Regenerating BPP, structure, and loop via ViennaRNA (len: {len(seq)}, error: {type(e).__name__})")
 
-                # CRITICAL FIX: Use file locking to prevent race conditions
-                safe_file_write_with_lock(bpp_file, lambda path: np.save(path, bpps))
-                safe_file_write_with_lock(struc_file, lambda path: pickle.dump(structures, open(path, 'wb')))
-                safe_file_write_with_lock(loop_file, lambda path: pickle.dump(loops, open(path, 'wb')))
-            except (FileNotFoundError, IOError, ValueError):
-                # 🔁 Force regeneration with ViennaRNA
-                print(f"[{id}] Regenerating BPP, structure, and loop via ViennaRNA (len: {len(seq)})")
-
-                # Generate BPP
+                # Generate BPP matrix
                 bpp_matrix = generate_bpp_matrix(seq)
 
-                # Generate structure and loop
+                # Generate structure and loop annotations
                 structure, loop_annotation = generate_structure_and_loop(seq)
                 structures = [structure]
                 loops = [loop_annotation]
@@ -465,25 +453,7 @@ class RNADataset(Dataset):
                 safe_file_write_with_lock(struc_file, lambda path: pickle.dump(structures, open(path, 'wb')))
                 safe_file_write_with_lock(loop_file, lambda path: pickle.dump(loops, open(path, 'wb')))
 
-            # Apply padding if needed - use standard length consistently
-            padding_applied = False
-            if pad and seq_len < self.standard_length:
-                current_len = bpps.shape[1]
-                assert bpps.shape[1] == bpps.shape[2], f"Non-square BPP before padding: {bpps.shape}"
-                pad_len = self.standard_length - current_len
-                if pad_len > 0:
-                    bpps = np.pad(bpps, ([0, 0], [0, pad_len], [0, pad_len]), constant_values=0)
-                    padding_applied = True
-
-            # CRITICAL FIX: Only save to disk if data was regenerated or modified (padding applied)
-            # This prevents unnecessary overwrites and race conditions in multi-process loading
-            # Data is already saved in the exception handlers above when regenerated
-            if padding_applied:
-                # Save only when padding modifies the data, using file locking
-                safe_file_write_with_lock(bpp_file, lambda path: np.save(path, bpps))
-                # Note: structures and loops don't need re-saving as they weren't modified
-
-            # Process sequence, structure, and loop type
+            # Process sequence, structure, and loop type BEFORE padding
             input_data = []
             for j in range(min(bpps.shape[0], len(structures))):
                 # FIXED: Complete sequence, structure, and loop processing
@@ -507,17 +477,31 @@ class RNADataset(Dataset):
                 assert np.all((input_loop >= 0) & (input_loop < 7)), \
                     f"Loop label out of bounds: {np.unique(input_loop)}"
 
-            # Convert to array and apply consistent padding
+            # Convert to array
             input_data = np.asarray(input_data)
+
+            # Apply padding if needed - use standard length consistently (SINGLE padding operation)
+            padding_applied = False
             if pad and seq_len < self.standard_length:
                 current_len = bpps.shape[1]
                 assert bpps.shape[1] == bpps.shape[2], f"Non-square BPP before padding: {bpps.shape}"
                 pad_len = self.standard_length - current_len
+
                 if pad_len > 0:
+                    # Pad BPP matrices
                     bpps = np.pad(bpps, ([0, 0], [0, pad_len], [0, pad_len]), constant_values=0)
-                # Apply consistent padding to input_data using standard_length
-                input_data = np.pad(input_data, ([0, 0], [0, self.standard_length - seq_len], [0, 0]),
-                                    constant_values=tokens.index('<unk>'))
+                    # Pad input data (sequence, structure, loop)
+                    input_data = np.pad(input_data, ([0, 0], [0, pad_len], [0, 0]),
+                                        constant_values=tokens.index('<unk>'))
+                    padding_applied = True
+
+            # CRITICAL FIX: Only save to disk if data was regenerated or modified (padding applied)
+            # This prevents unnecessary overwrites and race conditions in multi-process loading
+            # Data is already saved in the exception handlers above when regenerated
+            if padding_applied:
+                # Save only when padding modifies the data, using file locking
+                safe_file_write_with_lock(bpp_file, lambda path: np.save(path, bpps))
+                # Note: structures and loops don't need re-saving as they weren't modified
 
             # Store data and BPP matrices
             self.data.append(input_data)
