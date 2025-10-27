@@ -22,6 +22,12 @@ from ranger import Ranger
 from sklearn.model_selection import train_test_split, KFold
 from position_aware_validation import PositionAwareValidator
 
+# RNA Sequence Length Constants
+SEQ_LENGTH_SHORT = 107  # Short sequence length
+SEQ_LENGTH_LONG = 130   # Long sequence length
+SEQ_LENGTH_SCORED = 68  # Competition-scored region
+SEQ_LENGTH_FULL = 91    # Full padded sequence length for model
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu_id', type=str, default='0', help='which gpu to use')
@@ -219,9 +225,13 @@ def train_fold():
     train_ew = error_weights[train_indices]
     val_ew = error_weights[val_indices]
 
-    # CRITICAL FIX: Pad training labels to 91 positions for consistency
-    train_labels = np.pad(train_labels, ((0, 0), (0, 23), (0, 0)), constant_values=0)
-    train_ew = np.pad(train_ew, ((0, 0), (0, 23), (0, 0)), constant_values=0)
+    # CRITICAL FIX: Pad training labels to full sequence length for consistency
+    current_label_length = train_labels.shape[1]
+    pad_length = SEQ_LENGTH_FULL - current_label_length
+    if pad_length > 0:
+        train_labels = np.pad(train_labels, ((0, 0), (0, pad_length), (0, 0)), constant_values=0)
+        train_ew = np.pad(train_ew, ((0, 0), (0, pad_length), (0, 0)), constant_values=0)
+        print(f"Padded training labels from {current_label_length} to {SEQ_LENGTH_FULL} positions")
     
     n_train = len(train_labels)
 
@@ -261,7 +271,7 @@ def train_fold():
     print("✅ Winner's distance feature computation validated")
 
     # Process long sequences (130bp)
-    ls_indices = test.seq_length == 130
+    ls_indices = test.seq_length == SEQ_LENGTH_LONG
     long_data = test[ls_indices]
     long_ids = np.asarray(long_data.id.to_list())
     long_sequences = np.asarray(long_data.sequence.to_list())
@@ -274,14 +284,14 @@ def train_fold():
     long_weights = np.clip(long_weights * 0.1, 0.01, 1.0)
 
     # Process short sequences (107bp)
-    ss_indices = test.seq_length == 107
+    ss_indices = test.seq_length == SEQ_LENGTH_SHORT
     short_data = test[ss_indices]
     short_ids = np.asarray(short_data.id)
     short_sequences = np.asarray(short_data.sequence)
 
     # Apply uncertainty masking with normalized weighting
     short_mask = (short_stds <= opts.std_threshold).astype(float)
-    short_mask[:, :, 68:] = 0  # Zero out positions beyond 68 for short sequences
+    short_mask[:, :, SEQ_LENGTH_SCORED:] = 0  # Zero out positions beyond scored region for short sequences
     # Use actual standard deviations for weighting, not threshold
     normalized_stds = short_stds + opts.std_eps
     short_weights = short_mask / normalized_stds
@@ -343,12 +353,12 @@ def train_fold():
         base_val_dataset, embedding_dict, graph_dist_dict, nearest_p_dict, nearest_up_dict
     )
 
-    # Fine-tuning dataset (real training data only, truncated to 68 positions)
+    # Fine-tuning dataset (real training data only, truncated to scored region)
     base_finetune_dataset = RNADataset(
         seqs=train_seqs[:n_train],
-        labels=train_labels[:n_train, :68],  # Truncate to 68 positions for real data
+        labels=train_labels[:n_train, :SEQ_LENGTH_SCORED],  # Truncate to scored region for real data
         ids=train_ids[:n_train],
-        ew=train_ew[:n_train, :68],
+        ew=train_ew[:n_train, :SEQ_LENGTH_SCORED],
         bpp_path=opts.path,
         num_layers=opts.nlayers,
         training=True

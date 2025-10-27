@@ -1,16 +1,15 @@
 import torch
-import os
-from sklearn import metrics
-import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
-import Metrics
-import numpy as np
 import os
+import shutil
+from sklearn import metrics
+from sklearn.model_selection import KFold, StratifiedKFold
+import numpy as np
 import pandas as pd
 import pickle
-from sklearn.model_selection import KFold, StratifiedKFold
+from tqdm import tqdm
+import Metrics
 
 
 def get_distance_mask(L):
@@ -114,15 +113,40 @@ def get_alt_structures_50C(df):
     return inputs
 
 
-def MCRMSE(y_pred,y_true):
-    colwise_mse = torch.mean(torch.square(y_true - y_pred), axis=1)
-    MCRMSE = torch.mean(torch.sqrt(colwise_mse), axis=1)
-    return MCRMSE
+def MCRMSE(y_pred, y_true):
+    """
+    Compute Mean Column-wise Root Mean Squared Error.
 
-def weighted_MCRMSE(y_pred,y_true,ew):
-    colwise_mse = torch.mean(ew*torch.square(y_true - y_pred), axis=1)
-    MCRMSE = torch.mean(torch.sqrt(colwise_mse), axis=1)
-    return MCRMSE
+    Args:
+        y_pred: Predictions tensor (batch, seq_len, n_targets)
+        y_true: Ground truth tensor (batch, seq_len, n_targets)
+
+    Returns:
+        MCRMSE: Scalar mean RMSE across all targets
+    """
+    # Compute MSE per column (target) averaged over batch and sequence length
+    colwise_mse = torch.mean(torch.square(y_true - y_pred), dim=(0, 1))  # Shape: (n_targets,)
+    # Take sqrt to get RMSE per column, then average across columns
+    mcrmse = torch.mean(torch.sqrt(colwise_mse))  # Scalar
+    return mcrmse
+
+def weighted_MCRMSE(y_pred, y_true, ew):
+    """
+    Compute weighted Mean Column-wise Root Mean Squared Error.
+
+    Args:
+        y_pred: Predictions tensor (batch, seq_len, n_targets)
+        y_true: Ground truth tensor (batch, seq_len, n_targets)
+        ew: Error weights tensor (batch, seq_len, n_targets)
+
+    Returns:
+        Weighted MCRMSE: Scalar weighted mean RMSE across all targets
+    """
+    # Compute weighted MSE per column
+    colwise_mse = torch.mean(ew * torch.square(y_true - y_pred), dim=(0, 1))  # Shape: (n_targets,)
+    # Take sqrt to get RMSE per column, then average across columns
+    mcrmse = torch.mean(torch.sqrt(colwise_mse))  # Scalar
+    return mcrmse
 
 def get_errors(df, cols=['reactivity_error', 'deg_error_Mg_pH10', 'deg_error_pH10',
        'deg_error_Mg_50C', 'deg_error_50C']):
@@ -257,9 +281,12 @@ def get_best_weights_from_fold(fold, mode='supervised', top=5):
         os.makedirs('best_weights', exist_ok=True)
         for i, epoch_num in enumerate(top_epochs):
             weights_path = f'{checkpoints_folder}/epoch{epoch_num}.ckpt'
+            dest_name = f'pretrain_top{i + 1}.ckpt' if mode == 'pretrain' else f'fold{fold}top{i + 1}.ckpt'
+            dest_path = f'best_weights/{dest_name}'
+
             if os.path.exists(weights_path):
-                os.system(
-                    f'cp {weights_path} best_weights/{"pretrain_" if mode == "pretrain" else f"fold{fold}"}top{i + 1}.ckpt')
+                shutil.copy2(weights_path, dest_path)
+                print(f"Copied {weights_path} to {dest_path}")
             else:
                 print(f"Warning: {weights_path} not found")
     except FileNotFoundError:
@@ -331,16 +358,17 @@ def save_weights(model, optimizer, epoch, folder, is_best=False, val_loss=None):
         is_best: Flag indicating if current model has best validation performance
         val_loss: Validation loss value (for logging in best model info)
     """
-    if os.path.isdir(folder) == False:
+    if not os.path.isdir(folder):
         os.makedirs(folder, exist_ok=True)
 
     # Always save the standard epoch-numbered checkpoint
-    torch.save(model.state_dict(), f"{folder}/epoch{epoch + 1}.ckpt")
+    epoch_path = f"{folder}/epoch{epoch + 1}.ckpt"
+    torch.save(model.state_dict(), epoch_path)
 
     # Additionally save best model checkpoint if flagged
     if is_best:
         best_path = f"{folder}/best_model.ckpt"
-        os.system(f"cp {folder}/epoch{epoch + 1}.ckpt {best_path}")
+        shutil.copy2(epoch_path, best_path)
 
         # Optionally store metadata about the best checkpoint
         if val_loss is not None:
